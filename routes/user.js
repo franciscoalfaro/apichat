@@ -25,13 +25,23 @@ router.put("/update", checkAuth, UserController.update);
 router.post("/upload", [checkAuth, uploads.single("file0")], UserController.upload);
 router.get("/avatar/:file", UserController.avatar);
 
-//listado publico 
-router.get("/listado", UserController.listado)
+//listado de usuarios 
+router.get("/listado/:page?",checkAuth, UserController.listado)
 
-// Rutas para gestión de amigos
+// enviar solicitud de amistar
 router.post("/friend/request", checkAuth, UserController.sendFriendRequest);
+
+//aceptar solicitudes de amistad
 router.post("/friend/accept", checkAuth, UserController.acceptFriendRequest);
-router.get("/friends/:id", checkAuth, UserController.getFriendsList);
+
+//obtener mis amigos
+router.get("/friends/:page?", checkAuth, UserController.getFriendsList);
+
+//listar las solicitudes de amistad
+router.get("/requestfriends/:page?", checkAuth, UserController.requestFriendsList);
+
+router.get("/search", checkAuth, UserController.searchNewFriends);
+
 
 // Exportar router
 export default router;

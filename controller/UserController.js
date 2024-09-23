@@ -136,64 +136,64 @@ export const login = async (req, res) => {
 //actualizar datos del usuario
 export const update = async (req, res) => {
     try {
-      // Recoger datos del usuario que se actualizará
-      const userIdentity = req.user;
-      let userToUpdate = req.body;
-  
-      // Eliminar campos sobrantes
-      delete userToUpdate.iat;
-      delete userToUpdate.exp;
-      delete userToUpdate.role;
-      delete userToUpdate.image;
-  
-      // Comprobar si el usuario ya existe
-      const users = await User.find({
-        $or: [{ email: userToUpdate.email.toLowerCase() }],
-      });
-  
-      if (!users) {
-        return res.status(500).send({ status: "error", message: "No existe el usuario a actualizar" });
-      }
-  
-      let userIsset = false;
-      users.forEach((user) => {
-        if (user && user._id != userIdentity.id) userIsset = true;
-      });
-  
-      if (userIsset) {
-        return res.status(200).send({
-          status: "warning",
-          message: "El usuario ya existe",
+        // Recoger datos del usuario que se actualizará
+        const userIdentity = req.user;
+        let userToUpdate = req.body;
+
+        // Eliminar campos sobrantes
+        delete userToUpdate.iat;
+        delete userToUpdate.exp;
+        delete userToUpdate.role;
+        delete userToUpdate.image;
+
+        // Comprobar si el usuario ya existe
+        const users = await User.find({
+            $or: [{ email: userToUpdate.email.toLowerCase() }],
         });
-      }
-  
-      // Si hay contraseña, cifrarla
-      if (userToUpdate.password) {
-        let pwd = await bcrypt.hash(userToUpdate.password, 10);
-        userToUpdate.password = pwd;
-      } else {
-        delete userToUpdate.password;
-      }
-  
-      // Buscar el usuario y actualizarlo
-      const userUpdate = await User.findByIdAndUpdate(userIdentity.id, userToUpdate, { new: true });
-  
-      if (!userUpdate) {
-        return res.status(400).json({ status: "error", message: "Error al actualizar" });
-      }
-  
-      return res.status(200).json({
-        status: "success",
-        message: "Profile update success",
-        user: userUpdate, // Enviar el usuario actualizado
-      });
+
+        if (!users) {
+            return res.status(500).send({ status: "error", message: "No existe el usuario a actualizar" });
+        }
+
+        let userIsset = false;
+        users.forEach((user) => {
+            if (user && user._id != userIdentity.id) userIsset = true;
+        });
+
+        if (userIsset) {
+            return res.status(200).send({
+                status: "warning",
+                message: "El usuario ya existe",
+            });
+        }
+
+        // Si hay contraseña, cifrarla
+        if (userToUpdate.password) {
+            let pwd = await bcrypt.hash(userToUpdate.password, 10);
+            userToUpdate.password = pwd;
+        } else {
+            delete userToUpdate.password;
+        }
+
+        // Buscar el usuario y actualizarlo
+        const userUpdate = await User.findByIdAndUpdate(userIdentity.id, userToUpdate, { new: true });
+
+        if (!userUpdate) {
+            return res.status(400).json({ status: "error", message: "Error al actualizar" });
+        }
+
+        return res.status(200).json({
+            status: "success",
+            message: "Profile update success",
+            user: userUpdate, // Enviar el usuario actualizado
+        });
     } catch (error) {
-      return res.status(500).send({
-        status: "error",
-        message: "Error al obtener la información en el servidor",
-      });
+        return res.status(500).send({
+            status: "error",
+            message: "Error al obtener la información en el servidor",
+        });
     }
-  };
+};
 
 // perfil
 export const profile = async (req, res) => {
@@ -225,7 +225,7 @@ export const avatar = (req, res) => {
 
     //obtener parametro de la url
     const file = req.params.file
-    
+
     //montar el path real de la image
     const filePath = "./uploads/avatars/" + file
 
@@ -252,7 +252,7 @@ export const avatar = (req, res) => {
 
 //subida de image
 export const upload = async (req, res) => {
-    
+
     //recoger el fichero de image
     if (!req.file) {
         return res.status(404).send({
@@ -311,36 +311,87 @@ export const upload = async (req, res) => {
 
 }
 
-//end-point para listar informacion del usuario publico como el nombre la descripcion, necesito popular
+//end-point para listar informacion de los usuarios
 export const listado = async (req, res) => {
-    try {
-        // Obtener todos los skills sin paginación y excluyendo el campo userId
-        const usuario = await User.find({}, "-userId -password -eliminado -role -email -nick").sort({ fecha: -1 });
 
+    const userId = req.user.id; // ID del usuario autenticado
+    let page = 1
+    if (req.params.page) {
+        page = req.params.page
+    }
+    page = parseInt(page)
+
+    let itemPerPage = 6
+
+    try {
+        // Configurar opciones de paginación
+        const options = {
+            page,
+            limit: itemPerPage,
+            sort: { createdAt: -1 },  // Ordenar por fecha de creación, de más reciente a más antiguo
+            select: "-password -role -__v",  // Excluir campos sensibles como contraseña, rol y versión
+        };
+
+        // Excluir al usuario autenticado de los resultados
+        const usuarios = await User.paginate({ _id: { $ne: userId } }, options);
+
+        // Comprobar si se encontraron usuarios
+        if (!usuarios.docs.length) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'No se encontraron usuarios'
+            });
+        }
+
+        // Buscar solicitudes de amistad enviadas y recibidas
+        const solicitudesEnviadas = await Friends.find({ from: userId }).select('to status _id');
+        const solicitudesRecibidas = await Friends.find({ to: userId }).select('from status _id');
+
+        // Mapeamos los usuarios y añadimos el estado de la solicitud de amistad y el requestId
+        const usuariosConEstado = usuarios.docs.map(usuario => {
+            const solicitudEnviada = solicitudesEnviadas.find(solicitud => solicitud.to.equals(usuario._id));
+            const solicitudRecibida = solicitudesRecibidas.find(solicitud => solicitud.from.equals(usuario._id));
+
+            return {
+                ...usuario._doc,  // Incluimos los datos del usuario
+                solicitudAmistad: solicitudEnviada ? solicitudEnviada.status : 'no enviada',  // Estado de la solicitud enviada
+                solicitudRecibida: solicitudRecibida ? solicitudRecibida.status : 'no recibida', // Estado de la solicitud recibida
+                requestIdEnviada: solicitudEnviada ? solicitudEnviada._id : null,  // ID de la solicitud enviada
+                requestIdRecibida: solicitudRecibida ? solicitudRecibida._id : null   // ID de la solicitud recibida
+            };
+        });
+
+        // Respuesta de éxito con la lista de usuarios y el estado de la amistad
         return res.status(200).json({
             status: 'success',
-            message: 'Listado de usuario',
-            User: usuario,
-            totalItems: usuario.length
+            message: 'Usuarios encontrados',
+            usuarios: usuariosConEstado,      // Lista de los usuarios en la página actual con el estado de la amistad
+            totalPages: usuarios.totalPages,  // Número total de páginas
+            totalDocs: usuarios.totalDocs,    // Total de documentos
+            itemsPerPage: usuarios.limit,     // Número de usuarios por página
+            page: usuarios.page               // Página actual
         });
+
     } catch (error) {
+        console.error("Error al listar los usuarios:", error);
+
         return res.status(500).json({
             status: 'error',
-            message: 'Error al listar las usuario',
+            message: 'Error al listar los usuarios',
             error: error.message
         });
     }
-}
-
+};
 
 // Aceptar solicitud de amistad
 export const acceptFriendRequest = async (req, res) => {
     try {
         const { requestId } = req.body;
+        console.log(requestId)
         const request = await Friends.findById(requestId);
 
         if (!request) {
-            return res.status(404).json({ message: 'Solicitud de amistad no encontrada' });
+            return res.status(404).json({ status: 'error', message: 'Solicitud de amistad no encontrada' });
         }
 
         request.status = 'accepted';
@@ -359,44 +410,231 @@ export const acceptFriendRequest = async (req, res) => {
         await fromUser.save();
         await toUser.save();
 
-        res.status(200).json({ message: 'Amistad aceptada' });
+        res.status(200).json({ status: 'success', message: 'Amistad aceptada' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error al aceptar la solicitud de amistad', error: error.message });
     }
 };
 
-// Obtener listado de amigos
+// Obtener listado de mis amigos
 export const getFriendsList = async (req, res) => {
+    const userId = req.user.id; // ID del usuario autenticado
+    let page = parseInt(req.params.page) || 1; // Número de página, por defecto es 1
+    const itemPerPage = 6; // Número de items por página
+
     try {
-        const user = await User.findById(req.params.id).populate('friends');
+        // Configurar opciones de paginación
+        const options = {
+            page,
+            limit: itemPerPage,
+            sort: { createdAt: -1 }, // Ordenar por fecha de creación
+            populate: [
+                { path: 'from', select: 'name email online image' },  // Poblamos los campos de 'from' y 'to'
+                { path: 'to', select: 'name email online image' }
+            ]
+        };
 
-        if (!user) {
-            return res.status(404).json({ message: 'Usuario no encontrado' });
-        }
+        // Buscar las relaciones de amistad en las que el usuario autenticado es 'from' o 'to'
+        // y cuyo estado sea 'accepted'
+        const query = {
+            $or: [{ from: userId }, { to: userId }],
+            status: 'accepted' // Solo amigos aceptados
+        };
 
-        res.status(200).json(user.friends);
+        // Paginación usando el modelo 'Friends'
+        const friendsList = await Friends.paginate(query, options);
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Amigos encontrados',
+            friends: friendsList.docs,        // Lista de amigos en la página actual
+            totalPages: friendsList.totalPages, // Número total de páginas
+            totalDocs: friendsList.totalDocs,  // Total de amigos
+            itemsPerPage: friendsList.limit,   // Número de amigos por página
+            page: friendsList.page      // Página actual
+        });
+
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Error al obtener la lista de amigos', error: error.message });
+
+        return res.status(500).json({
+            status: 'error',
+            message: 'Error al listar los amigos',
+            error: error.message
+        });
     }
 };
+
 
 // Enviar solicitud de amistad
 export const sendFriendRequest = async (req, res) => {
     try {
-        const { fromId, toId } = req.body;
+        const { requestId } = req.body;
+        const userId = req.user.id
 
         // Validar que los IDs no estén vacíos y sean del tamaño correcto
-        if (!fromId || !toId || fromId.length !== 24 || toId.length !== 24) {
+        if (!userId || !requestId || userId.length !== 24 || requestId.length !== 24) {
             return res.status(400).json({ message: 'ID de usuario inválido' });
         }
 
-        const request = new Friends({ from: fromId, to: toId });
+        const request = new Friends({ from: userId, to: requestId });
         await request.save();
-        res.status(200).json({ message: 'Solicitud de amistad enviada' });
+        res.status(200).json({ status: 'success', message: 'Solicitud de amistad enviada' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error al enviar la solicitud de amistad', error: error.message });
+    }
+};
+
+
+//listar solicitudes de amistad
+export const requestFriendsList = async (req, res) => {
+    const userId = req.user.id;
+
+    let page = 1
+    if (req.params.page) {
+        page = req.params.page
+    }
+    page = parseInt(page)
+
+    let itemPerPage = 6
+
+    try {
+        // Configurar opciones de paginación
+        const options = {
+            page,
+            limit: itemPerPage,
+            sort: { createdAt: -1 },
+            populate: [
+                { path: 'from', select: 'name surname email online image' },  // Poblamos los campos de 'from' y 'to'
+                { path: 'to', select: 'name surname email online image' }
+            ]
+        };
+
+        
+        // Buscar todas las solicitudes de amistad
+        const requestList = await Friends.paginate({ to: userId }, options);
+
+
+        // Buscar solicitudes de amistad enviadas y recibidas
+        const solicitudesEnviadas = await Friends.find({ from: userId }).select('to status _id');
+        const solicitudesRecibidas = await Friends.find({ to: userId }).select('from status _id');
+
+        // Mapeamos los usuarios y añadimos el estado de la solicitud de amistad y el requestId
+        const usuariosConEstado = requestList.docs.map(usuario => {
+            const solicitudEnviada = solicitudesEnviadas.find(solicitud => solicitud.to.equals(usuario._id));
+            const solicitudRecibida = solicitudesRecibidas.find(solicitud => solicitud.from.equals(usuario._id));
+
+            return {
+                ...usuario._doc,  // Incluimos los datos del usuario
+                solicitudAmistad: solicitudEnviada ? solicitudEnviada.status : 'no enviada',  // Estado de la solicitud enviada
+                solicitudRecibida: solicitudRecibida ? solicitudRecibida.status : 'no recibida', // Estado de la solicitud recibida
+                requestIdEnviada: solicitudEnviada ? solicitudEnviada._id : null,  // ID de la solicitud enviada
+                requestIdRecibida: solicitudRecibida ? solicitudRecibida._id : null   // ID de la solicitud recibida
+            };
+        });
+
+
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'solicitudes encontradas',
+            solicitudes: usuariosConEstado, // Lista de los amigos en la página actual
+                    
+            totalPages: requestList.totalPages,  // Número total de páginas
+            totalDocs: requestList.totalDocs,  // Total de documentos
+            itemsPerPage: requestList.limit,   // Número de requestList por página
+            page: requestList.page      // Página actual
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            status: 'error',
+            message: 'Error al listar las solicitudes',
+            error: error.message
+        });
+    }
+};
+
+
+//buscar amigos por nombre o email
+export const searchNewFriends = async (req, res) => {
+    const userId = req.user.id; // ID del usuario autenticado
+    const { searchTerm } = req.query; // Término de búsqueda, página y límite de resultados por página
+    console.log(userId)
+    let page = 1;
+
+    if (req.params.page) {
+        page = parseInt(req.params.page);
+    }
+    const limit = 10
+
+    // Validar que el término de búsqueda no esté vacío
+    if (!searchTerm || searchTerm.trim() === '') {
+        return res.status(400).json({
+            status: 'error',
+            message: 'Debe proporcionar un término de búsqueda'
+        });
+    }
+
+    try {
+        // Buscar los usuarios que coincidan por nombre, email o nickname
+        const searchQuery = {
+            $or: [
+                { name: new RegExp(searchTerm, 'i') }, // Búsqueda insensible a mayúsculas/minúsculas
+                { email: new RegExp(searchTerm, 'i') },
+                { nickname: new RegExp(searchTerm, 'i') }
+            ],
+            _id: { $ne: userId } // Excluir al usuario autenticado
+        };
+
+        // Obtener las relaciones de amistad del usuario autenticado
+        const friendsAndPending = await Friends.find({
+            $or: [{ from: userId }, { to: userId }]
+        });
+
+        // Obtener una lista de los IDs de usuarios que ya son amigos o tienen solicitudes pendientes
+        const excludedUserIds = friendsAndPending.map(friend =>
+            friend.from.toString() === userId ? friend.to.toString() : friend.from.toString()
+        );
+
+        // Incluir el usuario autenticado en la lista de exclusiones
+        excludedUserIds.push(userId);
+
+        // Filtrar los usuarios que no estén en la lista de exclusión y aplicar paginación
+        const users = await User.find({
+            ...searchQuery,
+            _id: { $nin: excludedUserIds } // Excluir usuarios que ya son amigos o tienen solicitudes pendientes
+        })
+            .select('name email nick image surname online friends create_at') // Seleccionar campos relevantes
+            .skip((page - 1) * limit) // Saltar registros según la página
+            .limit(parseInt(limit)); // Limitar el número de registros por página
+
+        // Obtener el número total de usuarios que coinciden con la búsqueda
+        const totalUsers = await User.countDocuments({
+            ...searchQuery,
+            _id: { $nin: excludedUserIds }
+        });
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Usuarios encontrados',
+            users,
+            totalPages: Math.ceil(totalUsers / limit), // Número total de páginas
+            currentPage: parseInt(page), // Página actual
+            totalUsers, // Número total de usuarios encontrados
+            itemsPerPage: limit // Usuarios por página
+        });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            status: 'error',
+            message: 'Error al buscar nuevos amigos',
+            error: error.message
+        });
     }
 };
