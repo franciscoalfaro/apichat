@@ -94,10 +94,8 @@ export const login = async (req, res) => {
         // Buscar usuario en la BD
         let user = await User.findOne({ email: params.email });
 
-        if (!user) {
-            return res.status(404).json({ status: "Not Found", message: "Usuario no registrado" });
-        }
-
+        if (!user) return res.status(404).json({ status: "Not Found", message: "Usuario no registrado" })
+            
         // Comprobar password que llega por el body y con la password del usuario de la BD
         const pwd = await bcrypt.compare(params.password, user.password);
 

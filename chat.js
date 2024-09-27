@@ -64,7 +64,6 @@ io.on('connection', (socket) => {
 
     // Cuando un usuario se conecta, puedes actualizar su estado como en línea
     socket.on('user_online', async (id) => {
-        console.log('usuario online', id)
         try {
             // Actualizar el estado del usuario a online en la base de datos
             await User.findByIdAndUpdate(id, { online: true });
@@ -79,7 +78,6 @@ io.on('connection', (socket) => {
 
 
     socket.on("userOffline", async (id) => {
-        console.log('userOffline', id)
         try {
             // Actualizar el estado del usuario a online en la base de datos
             await User.findByIdAndUpdate(id, { online: false });
