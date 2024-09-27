@@ -59,5 +59,7 @@ router.get("/requestfriends/:page?", checkAuth, UserController.requestFriendsLis
 // Buscar nuevos amigos
 router.get("/search", checkAuth, UserController.searchNewFriends);
 
+router.get("/getprofile/:id", checkAuth, UserController.profileGet)
+
 // Exportar router
 export default router;

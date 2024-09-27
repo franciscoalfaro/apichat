@@ -636,3 +636,71 @@ export const searchNewFriends = async (req, res) => {
         });
     }
 };
+
+
+//buscar un perfil
+export const profileGet = async (req, res) => {
+    const userId = req.user.id;
+    const userPerfil = req.params.id
+    
+
+    try {
+        // Obtener la información básica del usuario
+        const userProfile = await User.findById(userPerfil)
+            .select('name surname email online image')  // Selecciona los campos relevantes del perfil
+            .lean();  // Para mejorar el rendimiento
+
+        if (!userProfile) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Usuario no encontrado'
+            });
+        }
+
+        // Buscar solicitudes de amistad enviadas por el usuario
+        const solicitudesEnviadas = await Friends.find({ from: userPerfil })
+            .select('to status _id')  // Seleccionamos solo los campos necesarios
+            .populate({ path: 'to', select: 'name surname email online image' })  // Poblamos los datos del destinatario
+            .lean();  // Usamos lean() para mejorar el rendimiento
+
+        // Buscar solicitudes de amistad recibidas por el usuario
+        const solicitudesRecibidas = await Friends.find({ to: userProfile })
+            .select('from status _id')  // Seleccionamos solo los campos necesarios
+            .populate({ path: 'from', select: 'name surname email online image' })  // Poblamos los datos del remitente
+            .lean();
+
+        // Formatear las solicitudes enviadas para mostrar en el perfil
+        const solicitudesEnviadasFormat = solicitudesEnviadas.map(solicitud => ({
+            _id: solicitud._id,
+            usuario: solicitud.to,  // Datos del usuario destinatario
+            estado: solicitud.status
+        }));
+
+        // Formatear las solicitudes recibidas para mostrar en el perfil
+        const solicitudesRecibidasFormat = solicitudesRecibidas.map(solicitud => ({
+            _id: solicitud._id,
+            usuario: solicitud.from,  // Datos del usuario remitente
+            estado: solicitud.status
+        }));
+
+        // Devolver la información del perfil y las solicitudes de amistad
+        return res.status(200).json({
+            status: 'success',
+            message: 'Perfil encontrado',
+            profile: userProfile,  // Información del perfil del usuario
+            solicitudesEnviadas: solicitudesEnviadasFormat,  // Lista de solicitudes de amistad enviadas
+            solicitudesRecibidas: solicitudesRecibidasFormat  // Lista de solicitudes de amistad recibidas
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            status: 'error',
+            message: 'Error al obtener el perfil',
+            error: error.message
+        });
+    }
+};
+
+
