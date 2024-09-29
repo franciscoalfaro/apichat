@@ -72,6 +72,13 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Escuchar el evento de zumbido en el backend
+    socket.on('send_zumbido', (data) => {
+        const { to } = data; // El destinatario del zumbido
+        io.emit('receive_zumbido',{to}); // Emitir al usuario destinatario el evento 'receive_zumbido'
+    });
+
+
 
 
     socket.on("userOffline", async (id) => {
@@ -90,15 +97,15 @@ io.on('connection', (socket) => {
     // Recibir y manejar mensajes en tiempo real
     socket.on('send_message', async (data) => {
         const { from, to, message } = data; // 'from' debería contener solo el ID
-    
+
         try {
             // Buscar el usuario en la base de datos
             const sender = await User.findById(from._id).select('name image'); // Selecciona solo el nombre e imagen
-    
+
             // Guardar el mensaje en la base de datos
             const newMessage = new Message({ from: sender, to, message });
             await newMessage.save();
-    
+
             // Emitir el mensaje a los usuarios destinatarios
             io.emit('new_message', {
                 _id: newMessage._id,
@@ -111,13 +118,13 @@ io.on('connection', (socket) => {
                 message,
                 createdAt: newMessage.createdAt // Si es necesario
             });
-    
+
             console.log(newMessage);
         } catch (error) {
             console.error('Error al enviar el mensaje', error);
         }
     });
-      
+
 });
 
 
