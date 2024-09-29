@@ -385,7 +385,7 @@ export const listado = async (req, res) => {
 export const acceptFriendRequest = async (req, res) => {
     try {
         const { requestId } = req.body;
-        console.log(requestId)
+   
         const request = await Friends.findById(requestId);
 
         if (!request) {
@@ -562,7 +562,7 @@ export const requestFriendsList = async (req, res) => {
 export const searchNewFriends = async (req, res) => {
     const userId = req.user.id; // ID del usuario autenticado
     const { searchTerm } = req.query; // Término de búsqueda, página y límite de resultados por página
-    console.log(userId)
+   
     let page = 1;
 
     if (req.params.page) {
