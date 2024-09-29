@@ -54,9 +54,6 @@ app.use("/api/user", UserRoutes);
 app.use("/api/chat", ChatRoutes)
 
 
-
-
-
 // lógica de Socket.IO
 // Configuración de Socket.IO
 io.on('connection', (socket) => {
