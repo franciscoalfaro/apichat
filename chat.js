@@ -72,12 +72,10 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Escuchar el evento de zumbido en el backend
     socket.on('send_zumbido', (data) => {
         const { to } = data; // El destinatario del zumbido
-        io.emit('receive_zumbido',{to}); // Emitir al usuario destinatario el evento 'receive_zumbido'
+        io.to(to).emit('receive_zumbido', data); // Emitir al usuario destinatario el evento 'receive_zumbido'
     });
-
 
 
 
