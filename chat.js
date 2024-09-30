@@ -73,8 +73,10 @@ io.on('connection', (socket) => {
     });
 
     socket.on('send_zumbido', (data) => {
+        console.log(data)
         const { to } = data; // El destinatario del zumbido
         io.to(to).emit('receive_zumbido', data); // Emitir al usuario destinatario el evento 'receive_zumbido'
+        io.emit('receive_zumbido', data);
     });
 
 
@@ -116,6 +118,7 @@ io.on('connection', (socket) => {
                 message,
                 createdAt: newMessage.createdAt // Si es necesario
             });
+            io.to(to).emit('new_message', data);
 
             console.log(newMessage);
         } catch (error) {
