@@ -43,6 +43,7 @@ app.use(express.urlencoded({ extended: true }));
 //cargar rutas
 import UserRoutes from "./routes/user.js";
 import ChatRoutes from "./routes/chat.js";
+import RecoveryRoutes from './routes/recovery.js'
 
 
 
@@ -50,8 +51,11 @@ import ChatRoutes from "./routes/chat.js";
 // llamado a la ruta user
 app.use("/api/user", UserRoutes);
 
-//recovery
+//chat
 app.use("/api/chat", ChatRoutes)
+
+//recovery
+app.use("/api/recovery", RecoveryRoutes)
 
 
 // lógica de Socket.IO

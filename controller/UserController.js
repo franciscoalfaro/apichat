@@ -638,69 +638,67 @@ export const searchNewFriends = async (req, res) => {
 };
 
 
+
 //buscar un perfil
 export const profileGet = async (req, res) => {
-    const userId = req.user.id;
-    const userPerfil = req.params.id
-    
+    const userId = req.user.id;  // ID del usuario autenticado
+    const userPerfil = req.params.id;  // ID del perfil que estás buscando
 
     try {
-        // Obtener la información básica del usuario
-        const userProfile = await User.findById(userPerfil)
-            .select('name surname email online image')  // Selecciona los campos relevantes del perfil
-            .lean();  // Para mejorar el rendimiento
+        // Buscar el perfil del usuario con el ID proporcionado, excluyendo al usuario autenticado
+        const usuario = await User.findOne({ _id: userPerfil, _id: { $ne: userId } }).select('-password -role -__v');
 
-        if (!userProfile) {
+        // Comprobar si el usuario existe
+        if (!usuario) {
             return res.status(404).json({
                 status: 'error',
                 message: 'Usuario no encontrado'
             });
         }
 
-        // Buscar solicitudes de amistad enviadas por el usuario
-        const solicitudesEnviadas = await Friends.find({ from: userPerfil })
-            .select('to status _id')  // Seleccionamos solo los campos necesarios
-            .populate({ path: 'to', select: 'name surname email online image' })  // Poblamos los datos del destinatario
-            .lean();  // Usamos lean() para mejorar el rendimiento
+        // Buscar solicitudes de amistad enviadas y recibidas
+        const solicitudEnviada = await Friends.findOne({ from: userId, to: userPerfil }).select('to status _id');
+        const solicitudRecibida = await Friends.findOne({ from: userPerfil, to: userId }).select('from status _id');
 
-        // Buscar solicitudes de amistad recibidas por el usuario
-        const solicitudesRecibidas = await Friends.find({ to: userProfile })
-            .select('from status _id')  // Seleccionamos solo los campos necesarios
-            .populate({ path: 'from', select: 'name surname email online image' })  // Poblamos los datos del remitente
-            .lean();
+        // Buscar amigos del perfil (solicitudes aceptadas donde el usuario es `from` o `to`)
+        const amigosEnviados = await Friends.find({ from: userPerfil, status: 'accepted' }).populate('to', 'name email _id'); // amigos donde este usuario envió la solicitud
+        const amigosRecibidos = await Friends.find({ to: userPerfil, status: 'accepted' }).populate('from', 'name email _id'); // amigos donde este usuario recibió la solicitud
 
-        // Formatear las solicitudes enviadas para mostrar en el perfil
-        const solicitudesEnviadasFormat = solicitudesEnviadas.map(solicitud => ({
-            _id: solicitud._id,
-            usuario: solicitud.to,  // Datos del usuario destinatario
-            estado: solicitud.status
-        }));
+        // Combinar los amigos en un solo array, sacando la información relevante
+        const amigos = [
+            ...amigosEnviados.map(solicitud => solicitud.to), // Información de los amigos de las solicitudes enviadas
+            ...amigosRecibidos.map(solicitud => solicitud.from) // Información de los amigos de las solicitudes recibidas
+        ];
 
-        // Formatear las solicitudes recibidas para mostrar en el perfil
-        const solicitudesRecibidasFormat = solicitudesRecibidas.map(solicitud => ({
-            _id: solicitud._id,
-            usuario: solicitud.from,  // Datos del usuario remitente
-            estado: solicitud.status
-        }));
+        // Agregar el estado de la solicitud de amistad al perfil del usuario
+        const usuarioConEstado = {
+            ...usuario._doc,  // Incluye los datos del usuario
+            solicitudAmistad: solicitudEnviada ? solicitudEnviada.status : 'no enviada',  // Estado de la solicitud enviada
+            solicitudRecibida: solicitudRecibida ? solicitudRecibida.status : 'no recibida', // Estado de la solicitud recibida
+            requestIdEnviada: solicitudEnviada ? solicitudEnviada._id : null,  // ID de la solicitud enviada
+            requestIdRecibida: solicitudRecibida ? solicitudRecibida._id : null,  // ID de la solicitud recibida
+            amigos: amigos  // Lista de amigos del perfil
+        };
 
-        // Devolver la información del perfil y las solicitudes de amistad
+        // Respuesta de éxito con el perfil del usuario
         return res.status(200).json({
             status: 'success',
             message: 'Perfil encontrado',
-            profile: userProfile,  // Información del perfil del usuario
-            solicitudesEnviadas: solicitudesEnviadasFormat,  // Lista de solicitudes de amistad enviadas
-            solicitudesRecibidas: solicitudesRecibidasFormat  // Lista de solicitudes de amistad recibidas
+            usuario: usuarioConEstado  // Perfil del usuario con el estado de la amistad y amigos
         });
 
     } catch (error) {
-        console.error(error);
+        console.error("Error al buscar el perfil:", error);
 
         return res.status(500).json({
             status: 'error',
-            message: 'Error al obtener el perfil',
+            message: 'Error al buscar el perfil',
             error: error.message
         });
     }
 };
+
+
+
 
 
